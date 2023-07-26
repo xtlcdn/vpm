@@ -14,18 +14,8 @@
     },
     "bannerUrl":"banner.png",
     "githubRepos": [
-        "JLChnToZ/VVMW",
-        "JLChnToZ/VRCAGE",
-        "JLChnToZ/vrctzhologram"
-    ],
-    "packages":[
-        {
-            "name":"idv.jlchntoz.vvmw",
-            "releases": []
-        },
-        {
-            "name":"idv.jlchntoz.vrcage",
-            "releases": []
-        }
+        "source:JLChnToZ/VVMW",
+        "source:JLChnToZ/VRCAGE",
+        "source:JLChnToZ/vrctzhologram"
     ]
 }
