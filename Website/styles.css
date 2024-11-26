@@ -56,6 +56,8 @@ h1 {
 .caption1 {
   font-size: 1rem;
   color: var(--neutral-foreground-hover);
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .caption2 {
@@ -70,6 +72,13 @@ h1 {
   padding: 0.25rem;
   display: flex;
   flex: 1;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  background: var(--fill-color);
+  z-index: 1;
 }
 
 #packageGrid {
