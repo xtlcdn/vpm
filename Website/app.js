@@ -134,14 +134,13 @@ const setTheme = () => {
     if (activeMenuPackageUrl) {
       const activePackage = PACKAGES?.[activeMenuPackageId];
       const { pathname } = new URL(activeMenuPackageUrl);
-      const lastSlashIndex = pathname.lastIndexOf('/');
       const lastDotIndex = pathname.lastIndexOf('.');
       const displayName = activePackage?.displayName ?? activeMenuPackageId;
       const version = activePackage?.version ?? '';
-      const extension = lastDotIndex > lastSlashIndex ? pathname.substring(lastDotIndex) : '';
+      const extension = lastDotIndex >= 0 ? pathname.substring(lastDotIndex) : '';
       const anchor = document.createElement('a');
       anchor.href = activeMenuPackageUrl;
-      anchor.download = `${displayName}-${version}${extension}`;
+      anchor.download = `${displayName}-${version}${extension}`.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
       anchor.click();
     }
     hideRowMoreMenu();
