@@ -122,6 +122,14 @@
           Download .ZIP
         </div>
       </fluent-menu-item>
+      <fluent-menu-item id="rowMoreMenuDownloadInstaller">
+        <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+          <use href="#downloadicon"></use>
+        </svg>
+        <div>
+          Download Installer (.unitypackage)
+        </div>
+      </fluent-menu-item>
     </fluent-menu>
     <fluent-dialog id="packageInfoModal" hidden modal>
       <div class="col ps-4 pe-4">
@@ -186,7 +194,7 @@
       </div>
     </fluent-dialog>
     <fluent-card class="packages">
-      <fluent-data-grid id="packageGrid" role="grid" grid-template-columns="1fr 100px 360px">
+      <fluent-data-grid id="packageGrid" role="grid" grid-template-columns="1fr 100px 220px">
         <fluent-data-grid-row row-type="header">
           <fluent-data-grid-cell cell-type="columnheader" grid-column="1">
             Name
@@ -211,7 +219,6 @@
             </fluent-data-grid-cell>
             <fluent-data-grid-cell grid-column="3" class="row align-items-center justify-content-end">
               <fluent-button appearance="accent" class="rowAddToVccButton" data-package-id="{{ package.Name }}">Add to VCC</fluent-button>
-              <fluent-button class="rowInstallerButton ms-2" data-package-id="{{ package.Name }}">Download Installer</fluent-button>
               <fluent-button title="Package Info" class="rowPackageInfoButton ms-2" data-package-id="{{ package.Name }}">
                 <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <use href="#copyicon"></use>

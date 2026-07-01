@@ -100,6 +100,10 @@ const setTheme = () => {
   });
 
   const rowMoreMenu = document.getElementById('rowMoreMenu');
+  const rowMoreMenuDownload = document.getElementById('rowMoreMenuDownload');
+  const rowMoreMenuDownloadInstaller = document.getElementById('rowMoreMenuDownloadInstaller');
+  let activeMenuPackageId = null;
+  let activeMenuPackageUrl = null;
   const hideRowMoreMenu = e => {
     if (rowMoreMenu.contains(e.target)) return;
     document.removeEventListener('click', hideRowMoreMenu);
@@ -108,26 +112,61 @@ const setTheme = () => {
 
   const rowMenuButtons = document.querySelectorAll('.rowMenuButton');
   rowMenuButtons.forEach(button => {
-    button.addEventListener('click', e => {
-      if (rowMoreMenu?.hidden) {
-        rowMoreMenu.style.top = `${e.clientY + e.target.clientHeight}px`;
-        rowMoreMenu.style.left = `${e.clientX - 120}px`;
-        rowMoreMenu.hidden = false;
+    button.addEventListener('click', ({ currentTarget, clientX, clientY }) => {
+      activeMenuPackageId = currentTarget.dataset?.packageId ?? null;
+      activeMenuPackageUrl = currentTarget.dataset?.packageUrl ?? null;
 
-        const downloadLink = rowMoreMenu.querySelector('#rowMoreMenuDownload');
-        const downloadListener = () => {
-          window.open(e?.target?.dataset?.packageUrl, '_blank');
-        }
-        downloadLink.addEventListener('change', () => {
-          downloadListener();
-          downloadLink.removeEventListener('change', downloadListener);
-        });
+      rowMoreMenu.style.top = `${clientY + currentTarget.clientHeight}px`;
+      rowMoreMenu.style.left = `${clientX - 120}px`;
+      rowMoreMenu.hidden = false;
 
-        setTimeout(() => {
-          document.addEventListener('click', hideRowMoreMenu);
-        }, 1);
-      }
+      setTimeout(() => {
+        document.addEventListener('click', hideRowMoreMenu);
+      }, 1);
     });
+  });
+
+  rowMoreMenuDownload.addEventListener('click', () => {
+    if (activeMenuPackageUrl) {
+      window.open(activeMenuPackageUrl, '_blank');
+    }
+    rowMoreMenu.hidden = true;
+  });
+
+  rowMoreMenuDownloadInstaller.addEventListener('click', async () => {
+    if (rowMoreMenuDownloadInstaller.dataset.loading === 'true') {
+      return;
+    }
+
+    if (!activeMenuPackageId || !PACKAGES?.[activeMenuPackageId]) {
+      console.error(`Did not find package ${activeMenuPackageId}. Packages available:`, PACKAGES);
+      rowMoreMenu.hidden = true;
+      return;
+    }
+
+    const label = rowMoreMenuDownloadInstaller.querySelector('div');
+    const initialLabel = label?.textContent;
+    rowMoreMenuDownloadInstaller.dataset.loading = 'true';
+    if (label) {
+      label.textContent = 'Building Installer...';
+    }
+
+    try {
+      const installerContent = await createUnityPackage({
+        vpmRepositories: [LISTING_URL],
+        vpmDependencies: { [activeMenuPackageId]: PACKAGES[activeMenuPackageId].version },
+      });
+      const installerFileName = `${activeMenuPackageId.replace(/[^a-zA-Z0-9._-]/g, '_')}-installer.unitypackage`;
+      downloadUnityPackage(installerContent, installerFileName);
+    } catch (error) {
+      console.error(`Failed to build installer for ${activeMenuPackageId}`, error);
+    } finally {
+      rowMoreMenuDownloadInstaller.dataset.loading = 'false';
+      if (label && initialLabel) {
+        label.textContent = initialLabel;
+      }
+      rowMoreMenu.hidden = true;
+    }
   });
 
   const packageInfoModal = document.getElementById('packageInfoModal');
@@ -156,41 +195,6 @@ const setTheme = () => {
   const rowAddToVccButtons = document.querySelectorAll('.rowAddToVccButton');
   rowAddToVccButtons.forEach((button) => {
     button.addEventListener('click', () => window.location.assign(`vcc://vpm/addRepo?url=${encodeURIComponent(LISTING_URL)}`));
-  });
-
-  const rowInstallerButtons = document.querySelectorAll('.rowInstallerButton');
-  rowInstallerButtons.forEach((button) => {
-    button.addEventListener('click', async ({ currentTarget }) => {
-      const packageId = currentTarget?.dataset?.packageId;
-      if (!packageId || !PACKAGES?.[packageId]) {
-        console.error(`Did not find package ${packageId}. Packages available:`, PACKAGES);
-        return;
-      }
-
-      if (currentTarget.dataset.loading === 'true') {
-        return;
-      }
-
-      const initialText = currentTarget.textContent;
-      currentTarget.dataset.loading = 'true';
-      currentTarget.disabled = true;
-      currentTarget.textContent = 'Building...';
-
-      try {
-        const installerContent = await createUnityPackage({
-          vpmRepositories: [LISTING_URL],
-          vpmDependencies: { [packageId]: PACKAGES[packageId].version },
-        });
-        const installerFileName = `${packageId.replace(/[^a-zA-Z0-9._-]/g, '_')}-installer.unitypackage`;
-        downloadUnityPackage(installerContent, installerFileName);
-      } catch (error) {
-        console.error(`Failed to build installer for ${packageId}`, error);
-      } finally {
-        currentTarget.dataset.loading = 'false';
-        currentTarget.disabled = false;
-        currentTarget.textContent = initialText;
-      }
-    });
   });
 
   const rowPackageInfoButton = document.querySelectorAll('.rowPackageInfoButton');
