@@ -105,42 +105,62 @@ const setTheme = () => {
   let activeMenuPackageId = null;
   let activeMenuPackageUrl = null;
   const hideRowMoreMenu = e => {
-    if (rowMoreMenu.contains(e.target)) return;
+    if (e?.target && (rowMoreMenu.contains(e.target) || e.target.closest('.rowMenuButton'))) {
+      return;
+    }
     document.removeEventListener('click', hideRowMoreMenu);
     rowMoreMenu.hidden = true;
   }
 
   const rowMenuButtons = document.querySelectorAll('.rowMenuButton');
   rowMenuButtons.forEach(button => {
-    button.addEventListener('click', ({ currentTarget, clientX, clientY }) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+
+      const { currentTarget } = event;
+      const packageId = currentTarget.dataset?.packageId ?? null;
+      const packageUrl = currentTarget.dataset?.packageUrl ?? null;
+
+      if (!rowMoreMenu.hidden && activeMenuPackageId === packageId) {
+        hideRowMoreMenu();
+        return;
+      }
+
       activeMenuPackageId = currentTarget.dataset?.packageId ?? null;
       activeMenuPackageUrl = currentTarget.dataset?.packageUrl ?? null;
 
-      rowMoreMenu.style.top = `${clientY + currentTarget.clientHeight}px`;
-      rowMoreMenu.style.left = `${clientX - 120}px`;
+      const anchorRect = currentTarget.getBoundingClientRect();
+      rowMoreMenu.style.top = `${anchorRect.bottom + window.scrollY}px`;
+      rowMoreMenu.style.left = `${anchorRect.right + window.scrollX - 120}px`;
       rowMoreMenu.hidden = false;
 
+      document.removeEventListener('click', hideRowMoreMenu);
       setTimeout(() => {
         document.addEventListener('click', hideRowMoreMenu);
       }, 1);
+
+      activeMenuPackageId = packageId;
+      activeMenuPackageUrl = packageUrl;
     });
   });
 
-  rowMoreMenuDownload.addEventListener('click', () => {
+  rowMoreMenuDownload.addEventListener('click', (event) => {
+    event.stopPropagation();
     if (activeMenuPackageUrl) {
       window.open(activeMenuPackageUrl, '_blank');
     }
-    rowMoreMenu.hidden = true;
+    hideRowMoreMenu();
   });
 
-  rowMoreMenuDownloadInstaller.addEventListener('click', async () => {
+  rowMoreMenuDownloadInstaller.addEventListener('click', async (event) => {
+    event.stopPropagation();
     if (rowMoreMenuDownloadInstaller.dataset.loading === 'true') {
       return;
     }
 
     if (!activeMenuPackageId || !PACKAGES?.[activeMenuPackageId]) {
       console.error(`Did not find package ${activeMenuPackageId}. Packages available:`, PACKAGES);
-      rowMoreMenu.hidden = true;
+      hideRowMoreMenu();
       return;
     }
 
@@ -165,7 +185,7 @@ const setTheme = () => {
       if (label && initialLabel) {
         label.textContent = initialLabel;
       }
-      rowMoreMenu.hidden = true;
+      hideRowMoreMenu();
     }
   });
 

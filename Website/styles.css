@@ -1,5 +1,11 @@
 :root {
   color-scheme: light dark;
+  --accent-fill-rest: #EAA221;
+  --accent-fill-hover: #D8951A;
+  --accent-fill-active: #C78612;
+  --accent-foreground-rest: #1a1a1a;
+  --accent-foreground-hover: #1a1a1a;
+  --accent-foreground-active: #1a1a1a;
 }
 
 * {

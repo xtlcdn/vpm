@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: main
-    paths: source.json
+    paths:
+      - source.json
+      - Website/**
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
