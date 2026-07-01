@@ -31,8 +31,7 @@ const PACKAGES = {
 };
 
 const setTheme = () => {
-  const isDarkTheme = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
-  if (isDarkTheme()) {
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
     baseLayerLuminance.setValueFor(document.documentElement, StandardLuminance.DarkMode);
   } else {
     baseLayerLuminance.setValueFor(document.documentElement, StandardLuminance.LightMode);
@@ -42,9 +41,7 @@ const setTheme = () => {
 (() => {
   setTheme();
 
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    setTheme();
-  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setTheme);
 
   const packageGrid = document.getElementById('packageGrid');
 
