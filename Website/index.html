@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VCC Listing</title>
-  <script type="module" src="https://unpkg.com/@fluentui/web-components"></script>
+  <script type="module" src="https://unpkg.com/@fluentui/web-components@2.6.1"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -186,7 +186,7 @@
       </div>
     </fluent-dialog>
     <fluent-card class="packages">
-      <fluent-data-grid id="packageGrid" role="grid" grid-template-columns="1fr 100px 220px">
+      <fluent-data-grid id="packageGrid" role="grid" grid-template-columns="1fr 100px 360px">
         <fluent-data-grid-row row-type="header">
           <fluent-data-grid-cell cell-type="columnheader" grid-column="1">
             Name
@@ -211,12 +211,13 @@
             </fluent-data-grid-cell>
             <fluent-data-grid-cell grid-column="3" class="row align-items-center justify-content-end">
               <fluent-button appearance="accent" class="rowAddToVccButton" data-package-id="{{ package.Name }}">Add to VCC</fluent-button>
+              <fluent-button class="rowInstallerButton ms-2" data-package-id="{{ package.Name }}">Download Installer</fluent-button>
               <fluent-button title="Package Info" class="rowPackageInfoButton ms-2" data-package-id="{{ package.Name }}">
                 <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <use href="#copyicon"></use>
                 </svg>
               </fluent-button>
-              <fluent-button class="rowMenuButton ms-2" appearance="stealth" data-package-url="{{ package.ZipUrl }}">
+              <fluent-button class="rowMenuButton ms-2" appearance="stealth" data-package-id="{{ package.Name }}" data-package-url="{{ package.ZipUrl }}">
                 <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <use href="#downloadicon"></use>
                 </svg>

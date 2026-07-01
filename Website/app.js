@@ -1,4 +1,5 @@
-import { baseLayerLuminance, StandardLuminance } from 'https://unpkg.com/@fluentui/web-components@2';
+import { baseLayerLuminance, StandardLuminance } from 'https://unpkg.com/@fluentui/web-components@2.6.1';
+import { createUnityPackage, downloadUnityPackage } from './vpm_package_auto_installer_creator.js';
 
 const LISTING_URL = "{{ listingInfo.Url }}";
 
@@ -48,7 +49,7 @@ const setTheme = () => {
   const packageGrid = document.getElementById('packageGrid');
 
   const searchInput = document.getElementById('searchInput');
-  searchInput.addEventListener('input', ({ target: { value = '' }}) => {
+  searchInput.addEventListener('input', ({ target: { value = '' } }) => {
     const items = packageGrid.querySelectorAll('fluent-data-grid-row[row-type="default"]');
     items.forEach(item => {
       if (value === '') {
@@ -139,10 +140,12 @@ const setTheme = () => {
   });
 
   // Fluent dialogs use nested shadow-rooted elements, so we need to use JS to style them
-  const modalControl = packageInfoModal.shadowRoot.querySelector('.control');
-  modalControl.style.maxHeight = "90%";
-  modalControl.style.transition = 'height 0.2s ease-in-out';
-  modalControl.style.overflowY = 'hidden';
+  const modalControl = packageInfoModal.shadowRoot?.querySelector('.control');
+  if (modalControl) {
+    modalControl.style.maxHeight = "90%";
+    modalControl.style.transition = 'height 0.2s ease-in-out';
+    modalControl.style.overflowY = 'hidden';
+  }
 
   const packageInfoName = document.getElementById('packageInfoName');
   const packageInfoId = document.getElementById('packageInfoId');
@@ -158,10 +161,45 @@ const setTheme = () => {
     button.addEventListener('click', () => window.location.assign(`vcc://vpm/addRepo?url=${encodeURIComponent(LISTING_URL)}`));
   });
 
+  const rowInstallerButtons = document.querySelectorAll('.rowInstallerButton');
+  rowInstallerButtons.forEach((button) => {
+    button.addEventListener('click', async ({ currentTarget }) => {
+      const packageId = currentTarget?.dataset?.packageId;
+      if (!packageId || !PACKAGES?.[packageId]) {
+        console.error(`Did not find package ${packageId}. Packages available:`, PACKAGES);
+        return;
+      }
+
+      if (currentTarget.dataset.loading === 'true') {
+        return;
+      }
+
+      const initialText = currentTarget.textContent;
+      currentTarget.dataset.loading = 'true';
+      currentTarget.disabled = true;
+      currentTarget.textContent = 'Building...';
+
+      try {
+        const installerContent = await createUnityPackage({
+          vpmRepositories: [LISTING_URL],
+          vpmDependencies: { [packageId]: PACKAGES[packageId].version },
+        });
+        const installerFileName = `${packageId.replace(/[^a-zA-Z0-9._-]/g, '_')}-installer.unitypackage`;
+        downloadUnityPackage(installerContent, installerFileName);
+      } catch (error) {
+        console.error(`Failed to build installer for ${packageId}`, error);
+      } finally {
+        currentTarget.dataset.loading = 'false';
+        currentTarget.disabled = false;
+        currentTarget.textContent = initialText;
+      }
+    });
+  });
+
   const rowPackageInfoButton = document.querySelectorAll('.rowPackageInfoButton');
   rowPackageInfoButton.forEach((button) => {
-    button.addEventListener('click', e => {
-      const packageId = e.target.dataset?.packageId;
+    button.addEventListener('click', ({ currentTarget }) => {
+      const packageId = currentTarget.dataset?.packageId;
       const packageInfo = PACKAGES?.[packageId];
       if (!packageInfo) {
         console.error(`Did not find package ${packageId}. Packages available:`, PACKAGES);
@@ -208,7 +246,7 @@ const setTheme = () => {
 
       setTimeout(() => {
         const height = packageInfoModal.querySelector('.col').clientHeight;
-        modalControl.style.setProperty('--dialog-height', `${height + 14}px`);
+        modalControl?.style.setProperty('--dialog-height', `${height + 14}px`);
       }, 1);
     });
   });
