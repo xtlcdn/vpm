@@ -1,5 +1,5 @@
 import { baseLayerLuminance, StandardLuminance, accentBaseColor, SwatchRGB } from 'https://unpkg.com/@fluentui/web-components@2.6.1';
-import { createUnityPackage, downloadUnityPackage } from './vpm_package_auto_installer_creator.js';
+import { createUnityPackage, downloadUnityPackage } from './vpai_creator.js';
 
 const LISTING_URL = "{{ listingInfo.Url }}";
 

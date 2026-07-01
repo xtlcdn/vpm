@@ -12,17 +12,15 @@ let binary;
  * @return {Uint8Array}
  */
 export async function createUnityPackage(config) {
-  if (!binary) {
-    const wasmArray = await wasmBinary();
-    const { instance } = await WebAssembly.instantiate(wasmArray, {});
-    binary = instance.exports;
-  }
+  if (!binary) binary = (await wasmBinary()).instance.exports;
   return decodeWasmResult(createPackageWasm(encodeWasmInput(config)));
 }
 
 async function wasmBinary() {
-  const wasmUrl = new URL('./vpai_creator.wasm', import.meta.url);
-  return new Uint8Array(await (await fetch(wasmUrl)).arrayBuffer());
+  const wasmData = fetch(new URL('./vpai_creator.wasm', import.meta.url));
+  return await (WebAssembly.instantiateStreaming ?
+    WebAssembly.instantiateStreaming(wasmData) :
+    WebAssembly.instantiate(new Uint8Array(await (await wasmData).arrayBuffer())));
 }
 
 function encodeWasmInput(config) {
