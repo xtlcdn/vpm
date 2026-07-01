@@ -131,7 +131,19 @@ const setTheme = () => {
 
   rowMoreMenuDownload.addEventListener('click', event => {
     event.stopPropagation();
-    if (activeMenuPackageUrl) window.open(activeMenuPackageUrl, '_blank');
+    if (activeMenuPackageUrl) {
+      const activePackage = PACKAGES?.[activeMenuPackageId];
+      const { pathname } = new URL(activeMenuPackageUrl);
+      const lastSlashIndex = pathname.lastIndexOf('/');
+      const lastDotIndex = pathname.lastIndexOf('.');
+      const displayName = activePackage?.displayName ?? activeMenuPackageId;
+      const version = activePackage?.version ?? '';
+      const extension = lastDotIndex > lastSlashIndex ? pathname.substring(lastDotIndex) : '';
+      const anchor = document.createElement('a');
+      anchor.href = activeMenuPackageUrl;
+      anchor.download = `${displayName}-${version}${extension}`;
+      anchor.click();
+    }
     hideRowMoreMenu();
   });
 
@@ -153,12 +165,12 @@ const setTheme = () => {
     if (label) label.textContent = 'Building Installer...';
 
     try {
-      const { name, version } = PACKAGES[activeMenuPackageId];
+      const { displayName, version } = PACKAGES[activeMenuPackageId];
       const installerContent = await createUnityPackage({
         vpmRepositories: [LISTING_URL],
         vpmDependencies: { [activeMenuPackageId]: version },
       });
-      const installerFileName = `${name}-${version}-installer.unitypackage`.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
+      const installerFileName = `${displayName}-${version}-installer.unitypackage`.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
       downloadUnityPackage(installerContent, installerFileName);
     } catch (error) {
       console.error(`Failed to build installer for ${activeMenuPackageId}`, error);
