@@ -1,11 +1,17 @@
 :root {
   color-scheme: light dark;
-  --accent-fill-rest: #EAA221;
-  --accent-fill-hover: #D8951A;
-  --accent-fill-active: #C78612;
-  --accent-foreground-rest: #1a1a1a;
-  --accent-foreground-hover: #1a1a1a;
-  --accent-foreground-active: #1a1a1a;
+  --accent-fill-rest: #fcc960 !important;
+  --accent-fill-hover: #fcc04f !important;
+  --accent-fill-active: #fbb034 !important;
+  --accent-fill-focus: #fcc960 !important;
+  --accent-foreground-rest: #fddd82 !important;
+  --accent-foreground-hover: #fdec9e !important;
+  --accent-foreground-active: #fbb53d !important;
+  --accent-foreground-focus: #fddd82 !important;
+  --accent-stroke-control-rest: linear-gradient(#fdd37e 90%, #cca34e 100%) !important;
+  --accent-stroke-control-hover: linear-gradient(#fdcd72 90%, #cf9d41 100%) !important;
+  --accent-stroke-control-active: #fcbe59 !important;
+  --accent-stroke-control-focus: linear-gradient(#fdd37e 90%, #cca34e 100%) !important;
 }
 
 * {
