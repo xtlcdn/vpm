@@ -20,7 +20,7 @@ async function wasmBinary() {
   const wasmData = fetch(new URL('./vpai_creator.wasm', import.meta.url));
   return await (WebAssembly.instantiateStreaming ?
     WebAssembly.instantiateStreaming(wasmData) :
-    WebAssembly.instantiate(new Uint8Array(await (await wasmData).arrayBuffer())));
+    WebAssembly.instantiate(await (await wasmData).arrayBuffer()));
 }
 
 function encodeWasmInput(config) {
