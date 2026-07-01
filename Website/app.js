@@ -1,4 +1,4 @@
-import { baseLayerLuminance, StandardLuminance } from 'https://unpkg.com/@fluentui/web-components@2.6.1';
+import { baseLayerLuminance, StandardLuminance, accentBaseColor, SwatchRGB } from 'https://unpkg.com/@fluentui/web-components@2.6.1';
 import { createUnityPackage, downloadUnityPackage } from './vpm_package_auto_installer_creator.js';
 
 const LISTING_URL = "{{ listingInfo.Url }}";
@@ -36,6 +36,7 @@ const setTheme = () => {
   } else {
     baseLayerLuminance.setValueFor(document.documentElement, StandardLuminance.LightMode);
   }
+  accentBaseColor.setValueFor(document.documentElement, SwatchRGB.create(0.83, 0.47, 0));
 }
 
 (() => {
