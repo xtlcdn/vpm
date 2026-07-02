@@ -166,6 +166,7 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
   const packageInfoDependencies = document.getElementById('packageInfoDependencies');
   const packageInfoKeywords = document.getElementById('packageInfoKeywords');
   const packageInfoLicense = document.getElementById('packageInfoLicense');
+  const packageInfoLicenseText = document.getElementById('packageInfoLicenseText');
   const packageInfoDownloadZip = document.getElementById('packageInfoDownloadZip');
   const packageInfoDownloadInstaller = document.getElementById('packageInfoDownloadInstaller');
   const packageInfoDownloadInstallerLabel = document.getElementById('packageInfoDownloadInstallerLabel');
@@ -273,8 +274,17 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     }
 
     packageInfoLicense.parentElement.classList.remove('hidden');
-    packageInfoLicense.textContent = license ?? 'See License';
-    packageInfoLicense.href = licensesUrl ?? '#';
+    const text = license ?? 'See License';
+    if (licensesUrl?.length) {
+      packageInfoLicense.classList.remove('hidden');
+      packageInfoLicenseText.classList.add('hidden');
+      packageInfoLicense.textContent = text;
+      packageInfoLicense.href = licensesUrl;
+    } else {
+      packageInfoLicense.classList.add('hidden');
+      packageInfoLicenseText.classList.remove('hidden');
+      packageInfoLicenseText.textContent = text;
+    }
   };
 
   const renderPackageDependencies = dependencies => {
@@ -282,7 +292,23 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     for (const [name, version] of Object.entries(asObject(dependencies))) {
       const depRow = document.createElement('li');
       depRow.classList.add('mb-2');
-      depRow.textContent = `${name} @ v${version}`;
+      const dependencyLink = document.createElement('a');
+      const isInternalPackage = Boolean(PACKAGES[name]);
+      dependencyLink.textContent = name;
+      if (isInternalPackage) {
+        dependencyLink.href = '#';
+        dependencyLink.addEventListener('click', event => {
+          event.preventDefault();
+          openPackageInfo(name);
+        });
+      } else {
+        dependencyLink.href = `https://vpm-catalog.vercel.app/packages/${encodeURIComponent(name)}`;
+        dependencyLink.target = '_blank';
+        dependencyLink.rel = 'noopener noreferrer';
+      }
+
+      depRow.appendChild(dependencyLink);
+      depRow.appendChild(document.createTextNode(` @ v${version}`));
       packageInfoDependencies.appendChild(depRow);
     }
   };
@@ -299,6 +325,16 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
       const height = packageInfoModal.querySelector('.col').clientHeight;
       modalControl?.style.setProperty('--dialog-height', `${height + 14}px`);
     }, 1);
+  };
+
+  const openPackageInfo = packageId => {
+    if (!PACKAGES[packageId]) {
+      console.error(`Did not find package ${packageId}.`, PACKAGES);
+      return;
+    }
+    activeInfoPackageId = packageId;
+    renderPackageInfo(packageId);
+    packageInfoModal.hidden = false;
   };
 
   const renderPackageInfo = packageId => {
@@ -443,13 +479,7 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     const infoButton = event.target.closest('.rowPackageInfoButton');
     if (infoButton) {
       const packageId = infoButton.dataset?.packageId;
-      if (!PACKAGES[packageId]) {
-        console.error(`Did not find package ${packageId}.`, PACKAGES);
-        return;
-      }
-      activeInfoPackageId = packageId;
-      renderPackageInfo(packageId);
-      packageInfoModal.hidden = false;
+      openPackageInfo(packageId);
     }
   });
 
