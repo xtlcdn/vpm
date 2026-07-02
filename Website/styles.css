@@ -17,6 +17,11 @@ body {
   color: var(--neutral-foreground-rest);
 }
 
+fluent-select::part(listbox) {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 .hidden {
   display: none !important;
 }
