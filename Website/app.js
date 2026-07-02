@@ -1,213 +1,212 @@
 import { baseLayerLuminance, StandardLuminance, accentBaseColor, SwatchRGB } from 'https://unpkg.com/@fluentui/web-components@2.6.1';
 import { createUnityPackage, downloadUnityPackage } from './vpai_creator.js';
 
-const LISTING_URL = "{{ listingInfo.Url }}";
+const INDEX_JSON_PATH = './index.json';
 
-const PACKAGES = {
-{{~ for package in packages ~}}
-  "{{ package.Name }}": {
-    name: "{{ package.Name }}",
-    displayName: "{{ if package.DisplayName; package.DisplayName; end; }}",
-    description: "{{ if package.Description; package.Description; end; }}",
-    version: "{{ package.Version }}",
-    author: {
-      name: "{{ if package.Author.Name; package.Author.Name; end; }}",
-      url: "{{ if package.Author.Url; package.Author.Url; end; }}",
-    },
-    dependencies: {
-      {{~ for dependency in package.Dependencies ~}}
-        "{{ dependency.Name }}": "{{ dependency.Version }}",
-      {{~ end ~}}
-    },
-    keywords: [
-      {{~ for keyword in package.Keywords ~}}
-        "{{ keyword }}",
-      {{~ end ~}}
-    ],
-    license: "{{ package.License }}",
-    licensesUrl: "{{ package.LicensesUrl }}",
-  },
-{{~ end ~}}
-};
+let LISTING_URL = '';
+const PACKAGES = {};
 
 const setTheme = () => {
-  baseLayerLuminance.setValueFor(document.documentElement, window.matchMedia("(prefers-color-scheme: dark)").matches ?
+  baseLayerLuminance.setValueFor(document.documentElement, window.matchMedia('(prefers-color-scheme: dark)').matches ?
     StandardLuminance.DarkMode :
     StandardLuminance.LightMode
   );
   accentBaseColor.setValueFor(document.documentElement, SwatchRGB.create(0.83, 0.47, 0));
-}
+};
+
+const asObject = value => (typeof value === 'object' && value !== null ? value : {});
+
+const resolveUrl = (url, baseUrl) => {
+  if (!url) return null;
+  try {
+    return new URL(url, baseUrl).toString();
+  } catch (error) {
+    console.error(`Failed to resolve URL "${url}" against "${baseUrl}".`, error);
+    return null;
+  }
+};
+
+const getAuthorData = author => {
+  if (typeof author === 'string') {
+    return { name: author, email: '', url: '' };
+  }
+  const normalized = asObject(author);
+  return {
+    name: normalized.name ?? 'Unknown',
+    email: normalized.email ?? '',
+    url: normalized.url ?? '',
+  };
+};
+
+const normalizeInfoLink = infoLink => {
+  if (!infoLink) return { url: '', text: '' };
+  if (typeof infoLink === 'string') return { url: infoLink, text: 'Learn More' };
+  const normalized = asObject(infoLink);
+  return {
+    url: normalized.url ?? '',
+    text: normalized.text ?? 'Learn More',
+  };
+};
+
+const sanitizeFileName = value => value.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
+
+const getVersionComparator = semverLibrary => (a, b) => {
+  const aValid = semverLibrary.valid(a);
+  const bValid = semverLibrary.valid(b);
+
+  if (aValid && bValid) return semverLibrary.rcompare(a, b);
+  if (aValid) return -1;
+  if (bValid) return 1;
+  return b.localeCompare(a, undefined, { numeric: true });
+};
+
+const getDefaultVersion = (versionList, semverLibrary) => {
+  const stableVersions = versionList
+    .filter(version => semverLibrary.valid(version) && !semverLibrary.prerelease(version))
+    .sort(getVersionComparator(semverLibrary));
+  if (stableVersions.length > 0) return stableVersions[0];
+
+  const validVersions = versionList
+    .filter(version => semverLibrary.valid(version))
+    .sort(getVersionComparator(semverLibrary));
+  if (validVersions.length > 0) return validVersions[0];
+
+  return [...versionList].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0] ?? null;
+};
+
+const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
+  const packageIndex = {};
+  for (const [packageId, packageData] of Object.entries(asObject(packages))) {
+    const versions = asObject(packageData.versions);
+    const versionList = Object.keys(versions);
+    if (versionList.length === 0) continue;
+
+    const sortedVersions = [...versionList].sort(getVersionComparator(semverLibrary));
+    const latestStableVersion = getDefaultVersion(versionList, semverLibrary) ?? sortedVersions[0];
+    const selectedVersion = latestStableVersion;
+
+    packageIndex[packageId] = {
+      id: packageId,
+      versions: Object.fromEntries(
+        Object.entries(versions).map(([version, value]) => {
+          const versionInfo = asObject(value);
+          return [version, {
+            ...versionInfo,
+            author: getAuthorData(versionInfo.author),
+            url: resolveUrl(versionInfo.url, listingJsonUrl),
+            displayName: versionInfo.displayName ?? packageId,
+            description: versionInfo.description ?? '',
+            keywords: Array.isArray(versionInfo.keywords) ? versionInfo.keywords : [],
+            dependencies: asObject(versionInfo.vpmDependencies),
+            version,
+            packageId,
+          }];
+        }),
+      ),
+      sortedVersions,
+      latestStableVersion,
+      selectedVersion,
+    };
+  }
+  return packageIndex;
+};
 
 (() => {
   setTheme();
-
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setTheme);
 
+  const semverLibrary = window.semver;
+  if (!semverLibrary) {
+    throw new Error('Semver library was not loaded from unpkg.');
+  }
+
   const packageGrid = document.getElementById('packageGrid');
-
   const searchInput = document.getElementById('searchInput');
-  searchInput.addEventListener('input', ({ target: { value = '' } }) => {
-    const items = packageGrid.querySelectorAll('fluent-data-grid-row[row-type="default"]');
-    items.forEach(item => {
-      if (value === '') {
-        item.style.display = 'grid';
-        return;
-      }
-      item.style.display =
-        item.dataset?.packageName?.toLowerCase()?.includes(value.toLowerCase()) ||
-        item.dataset?.packageId?.toLowerCase()?.includes(value.toLowerCase()) ?
-        'grid' : 'none';
-    });
-  });
-
   const urlBarHelpButton = document.getElementById('urlBarHelp');
   const addListingToVccHelp = document.getElementById('addListingToVccHelp');
-  urlBarHelpButton.addEventListener('click', () => addListingToVccHelp.hidden = false);
   const addListingToVccHelpClose = document.getElementById('addListingToVccHelpClose');
-  addListingToVccHelpClose.addEventListener('click', () => addListingToVccHelp.hidden = true);
-
+  const vccListingInfoUrlField = document.getElementById('vccListingInfoUrlField');
   const vccListingInfoUrlFieldCopy = document.getElementById('vccListingInfoUrlFieldCopy');
-  vccListingInfoUrlFieldCopy.addEventListener('click', () => {
-    const vccUrlField = document.getElementById('vccListingInfoUrlField');
-    vccUrlField.select();
-    navigator.clipboard.writeText(vccUrlField.value);
-    vccUrlFieldCopy.appearance = 'accent';
-    setTimeout(() => vccUrlFieldCopy.appearance = 'neutral', 1000);
-  });
-
   const vccAddRepoButton = document.getElementById('vccAddRepoButton');
-  vccAddRepoButton.addEventListener('click', () => window.location.assign(`vcc://vpm/addRepo?url=${encodeURIComponent(LISTING_URL)}`));
-
+  const vccUrlField = document.getElementById('vccUrlField');
   const vccUrlFieldCopy = document.getElementById('vccUrlFieldCopy');
-  vccUrlFieldCopy.addEventListener('click', () => {
-    const vccUrlField = document.getElementById('vccUrlField');
-    vccUrlField.select();
-    navigator.clipboard.writeText(vccUrlField.value);
-    vccUrlFieldCopy.appearance = 'accent';
-    setTimeout(() => vccUrlFieldCopy.appearance = 'neutral', 1000);
-  });
+  const packageInfoVccUrlField = document.getElementById('packageInfoVccUrlField');
+  const listingBanner = document.getElementById('listingBanner');
+  const listingName = document.getElementById('listingName');
+  const listingDescription = document.getElementById('listingDescription');
+  const listingAuthorEmail = document.getElementById('listingAuthorEmail');
+  const publishedByTooltip = document.getElementById('publishedByTooltip');
+  const listingAuthorLink = document.getElementById('listingAuthorLink');
+  const listingInfoLinkTop = document.getElementById('listingInfoLinkTop');
+  const listingInfoLinkBottom = document.getElementById('listingInfoLinkBottom');
+  const listingInfoLinkTopAnchor = document.getElementById('listingInfoLinkTopAnchor');
+  const listingInfoLinkBottomAnchor = document.getElementById('listingInfoLinkBottomAnchor');
 
   const rowMoreMenu = document.getElementById('rowMoreMenu');
   const rowMoreMenuDownload = document.getElementById('rowMoreMenuDownload');
   const rowMoreMenuDownloadInstaller = document.getElementById('rowMoreMenuDownloadInstaller');
   let activeMenuPackageId = null;
-  let activeMenuPackageUrl = null;
-  const hideRowMoreMenu = e => {
-    if (e?.target && (rowMoreMenu.contains(e.target) || e.target.closest('.rowMenuButton')))
-      return;
-    document.removeEventListener('click', hideRowMoreMenu);
-    rowMoreMenu.hidden = true;
-  }
-
-  const showRowMoreMenu = anchorElement => {
-    const anchorRect = anchorElement.getBoundingClientRect();
-    rowMoreMenu.style.top = `${anchorRect.bottom + window.scrollY}px`;
-    rowMoreMenu.style.left = `${anchorRect.right + window.scrollX - 120}px`;
-    rowMoreMenu.hidden = false;
-
-    document.removeEventListener('click', hideRowMoreMenu);
-    setTimeout(() => document.addEventListener('click', hideRowMoreMenu), 1);
-  };
-
-  const handleRowMenuButtonClick = event => {
-    event.stopPropagation();
-
-    const { currentTarget } = event;
-    const packageId = currentTarget.dataset?.packageId ?? null;
-    const packageUrl = currentTarget.dataset?.packageUrl ?? null;
-
-    if (!rowMoreMenu.hidden && activeMenuPackageId === packageId) {
-      hideRowMoreMenu();
-      return;
-    }
-
-    activeMenuPackageId = packageId;
-    activeMenuPackageUrl = packageUrl;
-    showRowMoreMenu(currentTarget);
-  };
-
-  const rowMenuButtons = document.querySelectorAll('.rowMenuButton');
-  for (const button of rowMenuButtons) button.addEventListener('click', handleRowMenuButtonClick);
-
-  rowMoreMenuDownload.addEventListener('click', event => {
-    event.stopPropagation();
-    if (activeMenuPackageUrl) {
-      const activePackage = PACKAGES?.[activeMenuPackageId];
-      const { pathname } = new URL(activeMenuPackageUrl);
-      const lastDotIndex = pathname.lastIndexOf('.');
-      const displayName = activePackage?.displayName ?? activeMenuPackageId;
-      const version = activePackage?.version ?? '';
-      const extension = lastDotIndex >= 0 ? pathname.substring(lastDotIndex) : '';
-      const anchor = document.createElement('a');
-      anchor.href = activeMenuPackageUrl;
-      anchor.download = `${displayName}-${version}${extension}`.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
-      anchor.click();
-    }
-    hideRowMoreMenu();
-  });
-
-  rowMoreMenuDownloadInstaller.addEventListener('click', async event => {
-    event.stopPropagation();
-    if (rowMoreMenuDownloadInstaller.dataset.loading === 'true') {
-      return;
-    }
-
-    if (!activeMenuPackageId || !PACKAGES?.[activeMenuPackageId]) {
-      console.error(`Did not find package ${activeMenuPackageId}. Packages available:`, PACKAGES);
-      hideRowMoreMenu();
-      return;
-    }
-
-    const label = rowMoreMenuDownloadInstaller.querySelector('div');
-    const initialLabel = label?.textContent;
-    rowMoreMenuDownloadInstaller.dataset.loading = 'true';
-    if (label) label.textContent = 'Building Installer...';
-
-    try {
-      const { displayName, version } = PACKAGES[activeMenuPackageId];
-      const installerContent = await createUnityPackage({
-        vpmRepositories: [LISTING_URL],
-        vpmDependencies: { [activeMenuPackageId]: version },
-      });
-      const installerFileName = `${displayName}-${version}-installer.unitypackage`.replace(/[\[\]\/\\?%*:|"<>]/g, '_');
-      downloadUnityPackage(installerContent, installerFileName);
-    } catch (error) {
-      console.error(`Failed to build installer for ${activeMenuPackageId}`, error);
-    } finally {
-      rowMoreMenuDownloadInstaller.dataset.loading = 'false';
-      if (label && initialLabel) {
-        label.textContent = initialLabel;
-      }
-      hideRowMoreMenu();
-    }
-  });
 
   const packageInfoModal = document.getElementById('packageInfoModal');
   const packageInfoModalClose = document.getElementById('packageInfoModalClose');
-  packageInfoModalClose.addEventListener('click', () => packageInfoModal.hidden = true);
-
-  // Fluent dialogs use nested shadow-rooted elements, so we need to use JS to style them
-  const modalControl = packageInfoModal.shadowRoot?.querySelector('.control');
-  if (modalControl) {
-    modalControl.style.maxHeight = "90%";
-    modalControl.style.transition = 'height 0.2s ease-in-out';
-    modalControl.style.overflowY = 'hidden';
-  }
-
   const packageInfoName = document.getElementById('packageInfoName');
   const packageInfoId = document.getElementById('packageInfoId');
   const packageInfoVersion = document.getElementById('packageInfoVersion');
+  const packageInfoVersionSelect = document.getElementById('packageInfoVersionSelect');
   const packageInfoDescription = document.getElementById('packageInfoDescription');
   const packageInfoAuthor = document.getElementById('packageInfoAuthor');
   const packageInfoDependencies = document.getElementById('packageInfoDependencies');
   const packageInfoKeywords = document.getElementById('packageInfoKeywords');
   const packageInfoLicense = document.getElementById('packageInfoLicense');
+  const packageInfoDownloadZip = document.getElementById('packageInfoDownloadZip');
+  const packageInfoDownloadInstaller = document.getElementById('packageInfoDownloadInstaller');
+  const packageInfoDownloadInstallerLabel = document.getElementById('packageInfoDownloadInstallerLabel');
+  const packageInfoVccUrlFieldCopy = document.getElementById('packageInfoVccUrlFieldCopy');
 
-  const addToVCCUrl = `vcc://vpm/addRepo?url=${encodeURIComponent(LISTING_URL)}`;
-  const handleAddToVccClick = () => window.location.assign(addToVCCUrl);
+  let activeInfoPackageId = null;
 
-  const rowAddToVccButtons = document.querySelectorAll('.rowAddToVccButton');
-  for (const button of rowAddToVccButtons) button.addEventListener('click', handleAddToVccClick);
+  const getSelectedVersionInfo = packageId => {
+    const packageInfo = PACKAGES[packageId];
+    if (!packageInfo) return null;
+    const selectedVersion = packageInfo.selectedVersion;
+    return packageInfo.versions[selectedVersion] ?? null;
+  };
+
+  const getLatestStableVersionInfo = packageId => {
+    const packageInfo = PACKAGES[packageId];
+    if (!packageInfo) return null;
+    const latestStableVersion = packageInfo.latestStableVersion;
+    return packageInfo.versions[latestStableVersion] ?? null;
+  };
+
+  const downloadZipForVersion = versionInfo => {
+    if (!versionInfo?.url) return false;
+    const { pathname } = new URL(versionInfo.url);
+    const lastDotIndex = pathname.lastIndexOf('.');
+    const extension = lastDotIndex >= 0 ? pathname.substring(lastDotIndex) : '.zip';
+    const fileName = sanitizeFileName(`${versionInfo.displayName}-${versionInfo.version}${extension}`);
+    const anchor = document.createElement('a');
+    anchor.href = versionInfo.url;
+    anchor.download = fileName;
+    anchor.click();
+    return true;
+  };
+
+  const downloadInstallerForVersion = async versionInfo => {
+    const installerContent = await createUnityPackage({
+      vpmRepositories: [LISTING_URL],
+      vpmDependencies: { [versionInfo.packageId]: versionInfo.version },
+    });
+    const installerFileName = sanitizeFileName(`${versionInfo.displayName}-${versionInfo.version}-installer.unitypackage`);
+    downloadUnityPackage(installerContent, installerFileName);
+  };
+
+  const updateListingUrlFields = url => {
+    LISTING_URL = url;
+    vccUrlField.value = url;
+    vccListingInfoUrlField.value = url;
+    packageInfoVccUrlField.value = url;
+  };
 
   const renderPackageKeywords = (keywords = []) => {
     if (keywords.length === 0) {
@@ -216,7 +215,7 @@ const setTheme = () => {
     }
 
     packageInfoKeywords.parentElement.classList.remove('hidden');
-    packageInfoKeywords.innerHTML = null;
+    packageInfoKeywords.innerHTML = '';
     for (const keyword of keywords) {
       const keywordDiv = document.createElement('div');
       keywordDiv.classList.add('me-2', 'mb-2', 'badge');
@@ -237,14 +236,21 @@ const setTheme = () => {
   };
 
   const renderPackageDependencies = dependencies => {
-    packageInfoDependencies.innerHTML = null;
-    for (const [name, version] of Object.entries(dependencies)) {
+    packageInfoDependencies.innerHTML = '';
+    for (const [name, version] of Object.entries(asObject(dependencies))) {
       const depRow = document.createElement('li');
       depRow.classList.add('mb-2');
       depRow.textContent = `${name} @ v${version}`;
       packageInfoDependencies.appendChild(depRow);
     }
   };
+
+  const modalControl = packageInfoModal.shadowRoot?.querySelector('.control');
+  if (modalControl) {
+    modalControl.style.maxHeight = '90%';
+    modalControl.style.transition = 'height 0.2s ease-in-out';
+    modalControl.style.overflowY = 'hidden';
+  }
 
   const updatePackageInfoModalHeight = () => {
     setTimeout(() => {
@@ -253,41 +259,366 @@ const setTheme = () => {
     }, 1);
   };
 
-  const handlePackageInfoButtonClick = ({ currentTarget }) => {
-    const packageId = currentTarget.dataset?.packageId;
-    const packageInfo = PACKAGES?.[packageId];
-    if (!packageInfo) {
-      console.error(`Did not find package ${packageId}. Packages available:`, PACKAGES);
+  const renderPackageInfo = packageId => {
+    const packageData = PACKAGES[packageId];
+    const selectedVersionInfo = getSelectedVersionInfo(packageId);
+    if (!packageData || !selectedVersionInfo) {
+      console.error(`Did not find package or selected version for ${packageId}.`, PACKAGES);
       return;
     }
 
-    packageInfoName.textContent = packageInfo.displayName;
+    packageInfoName.textContent = selectedVersionInfo.displayName ?? packageId;
     packageInfoId.textContent = packageId;
-    packageInfoVersion.textContent = `v${packageInfo.version}`;
-    packageInfoDescription.textContent = packageInfo.description;
-    packageInfoAuthor.textContent = packageInfo.author.name;
-    packageInfoAuthor.href = packageInfo.author.url;
+    packageInfoVersion.textContent = `v${selectedVersionInfo.version}`;
+    packageInfoDescription.textContent = selectedVersionInfo.description ?? '';
+    packageInfoAuthor.textContent = selectedVersionInfo.author.name ?? 'Unknown';
+    packageInfoAuthor.href = selectedVersionInfo.author.url || '#';
 
-    renderPackageKeywords(packageInfo.keywords);
-    renderPackageLicense(packageInfo.license, packageInfo.licensesUrl);
-    renderPackageDependencies(packageInfo.dependencies);
+    packageInfoVersionSelect.innerHTML = '';
+    for (const version of packageData.sortedVersions) {
+      const option = document.createElement('fluent-option');
+      option.value = version;
+      option.textContent = version;
+      packageInfoVersionSelect.appendChild(option);
+    }
+    packageInfoVersionSelect.value = packageData.selectedVersion;
 
-    packageInfoModal.hidden = false;
+    renderPackageKeywords(selectedVersionInfo.keywords);
+    renderPackageLicense(selectedVersionInfo.license, selectedVersionInfo.licensesUrl);
+    renderPackageDependencies(selectedVersionInfo.dependencies);
     updatePackageInfoModalHeight();
   };
 
-  const rowPackageInfoButton = document.querySelectorAll('.rowPackageInfoButton');
-  for (const button of rowPackageInfoButton) button.addEventListener('click', handlePackageInfoButtonClick);
+  const createPackageRow = packageId => {
+    const packageVersionInfo = getLatestStableVersionInfo(packageId);
+    if (!packageVersionInfo) return null;
 
-  const packageInfoVccUrlFieldCopy = document.getElementById('packageInfoVccUrlFieldCopy');
-  packageInfoVccUrlFieldCopy.addEventListener('click', () => {
-    const vccUrlField = document.getElementById('packageInfoVccUrlField');
+    const row = document.createElement('fluent-data-grid-row');
+    row.classList.add('package-row');
+    row.dataset.packageName = packageVersionInfo.displayName ?? packageId;
+    row.dataset.packageId = packageId;
+
+    const nameCell = document.createElement('fluent-data-grid-cell');
+    nameCell.setAttribute('grid-column', '1');
+    const nameCol = document.createElement('div');
+    nameCol.classList.add('col');
+    const name = document.createElement('div');
+    name.classList.add('packageName');
+    name.textContent = packageVersionInfo.displayName ?? packageId;
+    const description = document.createElement('div');
+    description.classList.add('caption1');
+    description.textContent = packageVersionInfo.description ?? '';
+    const id = document.createElement('div');
+    id.classList.add('caption2');
+    id.textContent = packageId;
+    nameCol.appendChild(name);
+    nameCol.appendChild(description);
+    nameCol.appendChild(id);
+    nameCell.appendChild(nameCol);
+
+    const typeCell = document.createElement('fluent-data-grid-cell');
+    typeCell.setAttribute('grid-column', '2');
+    typeCell.classList.add('row', 'align-items-center');
+    typeCell.textContent = packageVersionInfo.type ?? '-';
+
+    const actionsCell = document.createElement('fluent-data-grid-cell');
+    actionsCell.setAttribute('grid-column', '3');
+    actionsCell.classList.add('row', 'align-items-center', 'justify-content-end');
+
+    const infoButton = document.createElement('fluent-button');
+    infoButton.title = 'Package Info';
+    infoButton.classList.add('rowPackageInfoButton', 'ms-2');
+    infoButton.dataset.packageId = packageId;
+    infoButton.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <use href="#copyicon"></use>
+      </svg>
+    `;
+
+    const menuButton = document.createElement('fluent-button');
+    menuButton.classList.add('rowMenuButton', 'ms-2');
+    menuButton.appearance = 'stealth';
+    menuButton.dataset.packageId = packageId;
+    menuButton.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+        <use href="#downloadicon"></use>
+      </svg>
+    `;
+
+    actionsCell.appendChild(infoButton);
+    actionsCell.appendChild(menuButton);
+    row.appendChild(nameCell);
+    row.appendChild(typeCell);
+    row.appendChild(actionsCell);
+
+    return row;
+  };
+
+  const renderPackageRows = () => {
+    for (const existingRow of packageGrid.querySelectorAll('.package-row')) {
+      existingRow.remove();
+    }
+
+    const packageIds = Object.keys(PACKAGES).sort((a, b) => {
+      const packageA = getLatestStableVersionInfo(a);
+      const packageB = getLatestStableVersionInfo(b);
+      const nameA = (packageA?.displayName ?? a).toLowerCase();
+      const nameB = (packageB?.displayName ?? b).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    for (const packageId of packageIds) {
+      const row = createPackageRow(packageId);
+      if (row) packageGrid.appendChild(row);
+    }
+  };
+
+  const renderListingInfo = (listing, listingJsonUrl) => {
+    listingName.textContent = listing.name ?? 'Package Listing';
+
+    if (listing.description) {
+      listingDescription.textContent = listing.description;
+      listingDescription.classList.remove('hidden');
+    } else {
+      listingDescription.classList.add('hidden');
+    }
+
+    const author = getAuthorData(listing.author);
+    listingAuthorLink.textContent = author.name;
+    listingAuthorLink.href = author.url || '#';
+
+    if (author.email) {
+      listingAuthorEmail.textContent = author.email;
+      publishedByTooltip.hidden = false;
+    } else {
+      listingAuthorEmail.textContent = '';
+      publishedByTooltip.hidden = true;
+    }
+
+    const bannerUrl = resolveUrl(listing.bannerUrl ?? listing.bannerImageUrl, listingJsonUrl);
+    if (bannerUrl) {
+      listingBanner.style.backgroundImage = `url(${bannerUrl})`;
+      listingBanner.classList.remove('hidden');
+    } else {
+      listingBanner.classList.add('hidden');
+    }
+
+    const infoLink = normalizeInfoLink(listing.infoLink);
+    if (infoLink.url) {
+      const infoUrl = resolveUrl(infoLink.url, listingJsonUrl);
+      if (infoUrl) {
+        listingInfoLinkTopAnchor.href = infoUrl;
+        listingInfoLinkTopAnchor.textContent = infoLink.text;
+        listingInfoLinkBottomAnchor.href = infoUrl;
+        listingInfoLinkBottomAnchor.textContent = infoLink.text;
+        listingInfoLinkTop.classList.remove('hidden');
+        listingInfoLinkBottom.classList.remove('hidden');
+      } else {
+        listingInfoLinkTop.classList.add('hidden');
+        listingInfoLinkBottom.classList.add('hidden');
+      }
+    } else {
+      listingInfoLinkTop.classList.add('hidden');
+      listingInfoLinkBottom.classList.add('hidden');
+    }
+  };
+
+  const hideRowMoreMenu = event => {
+    if (event?.target && (rowMoreMenu.contains(event.target) || event.target.closest('.rowMenuButton'))) return;
+    document.removeEventListener('click', hideRowMoreMenu);
+    rowMoreMenu.hidden = true;
+  };
+
+  const showRowMoreMenu = anchorElement => {
+    const anchorRect = anchorElement.getBoundingClientRect();
+    rowMoreMenu.style.top = `${anchorRect.bottom + window.scrollY}px`;
+    rowMoreMenu.style.left = `${anchorRect.right + window.scrollX - 120}px`;
+    rowMoreMenu.hidden = false;
+
+    document.removeEventListener('click', hideRowMoreMenu);
+    setTimeout(() => document.addEventListener('click', hideRowMoreMenu), 1);
+  };
+
+  searchInput.addEventListener('input', ({ target: { value = '' } }) => {
+    const rows = packageGrid.querySelectorAll('.package-row');
+    const normalized = value.toLowerCase();
+    rows.forEach(row => {
+      if (value === '') {
+        row.style.display = 'grid';
+        return;
+      }
+
+      const shouldShow =
+        row.dataset?.packageName?.toLowerCase()?.includes(normalized) ||
+        row.dataset?.packageId?.toLowerCase()?.includes(normalized);
+      row.style.display = shouldShow ? 'grid' : 'none';
+    });
+  });
+
+  urlBarHelpButton.addEventListener('click', () => addListingToVccHelp.hidden = false);
+  addListingToVccHelpClose.addEventListener('click', () => addListingToVccHelp.hidden = true);
+
+  vccListingInfoUrlFieldCopy.addEventListener('click', () => {
+    vccListingInfoUrlField.select();
+    navigator.clipboard.writeText(vccListingInfoUrlField.value);
+    vccListingInfoUrlFieldCopy.appearance = 'accent';
+    setTimeout(() => vccListingInfoUrlFieldCopy.appearance = 'neutral', 1000);
+  });
+
+  vccAddRepoButton.addEventListener('click', () => {
+    if (!LISTING_URL) {
+      console.error('Listing URL is not initialized.');
+      return;
+    }
+    window.location.assign(`vcc://vpm/addRepo?url=${encodeURIComponent(LISTING_URL)}`);
+  });
+
+  vccUrlFieldCopy.addEventListener('click', () => {
     vccUrlField.select();
     navigator.clipboard.writeText(vccUrlField.value);
     vccUrlFieldCopy.appearance = 'accent';
     setTimeout(() => vccUrlFieldCopy.appearance = 'neutral', 1000);
   });
 
+  packageGrid.addEventListener('click', event => {
+    const menuButton = event.target.closest('.rowMenuButton');
+    if (menuButton) {
+      event.stopPropagation();
+      const packageId = menuButton.dataset?.packageId ?? null;
+
+      if (!rowMoreMenu.hidden && activeMenuPackageId === packageId) {
+        hideRowMoreMenu();
+        return;
+      }
+
+      activeMenuPackageId = packageId;
+      showRowMoreMenu(menuButton);
+      return;
+    }
+
+    const infoButton = event.target.closest('.rowPackageInfoButton');
+    if (infoButton) {
+      const packageId = infoButton.dataset?.packageId;
+      if (!PACKAGES[packageId]) {
+        console.error(`Did not find package ${packageId}.`, PACKAGES);
+        return;
+      }
+      activeInfoPackageId = packageId;
+      renderPackageInfo(packageId);
+      packageInfoModal.hidden = false;
+    }
+  });
+
+  rowMoreMenuDownload.addEventListener('click', event => {
+    event.stopPropagation();
+    const latestStableVersionInfo = activeMenuPackageId ? getLatestStableVersionInfo(activeMenuPackageId) : null;
+    if (!downloadZipForVersion(latestStableVersionInfo)) {
+      console.error(`Did not find a downloadable URL for package ${activeMenuPackageId}.`);
+    }
+    hideRowMoreMenu();
+  });
+
+  rowMoreMenuDownloadInstaller.addEventListener('click', async event => {
+    event.stopPropagation();
+    if (rowMoreMenuDownloadInstaller.dataset.loading === 'true') return;
+
+    const latestStableVersionInfo = activeMenuPackageId ? getLatestStableVersionInfo(activeMenuPackageId) : null;
+    if (!latestStableVersionInfo) {
+      console.error(`Did not find package ${activeMenuPackageId}.`, PACKAGES);
+      hideRowMoreMenu();
+      return;
+    }
+
+    const label = rowMoreMenuDownloadInstaller.querySelector('div');
+    const initialLabel = label?.textContent ?? 'Download Installer (.unitypackage)';
+    rowMoreMenuDownloadInstaller.dataset.loading = 'true';
+    if (label) label.textContent = 'Building Installer...';
+
+    try {
+      await downloadInstallerForVersion(latestStableVersionInfo);
+    } catch (error) {
+      console.error(`Failed to build installer for ${latestStableVersionInfo.packageId}`, error);
+    } finally {
+      rowMoreMenuDownloadInstaller.dataset.loading = 'false';
+      if (label) label.textContent = initialLabel;
+      hideRowMoreMenu();
+    }
+  });
+
+  packageInfoModalClose.addEventListener('click', () => packageInfoModal.hidden = true);
+
+  packageInfoVersionSelect.addEventListener('change', ({ target }) => {
+    if (!activeInfoPackageId) return;
+    const selectedVersion = target.value;
+    if (!PACKAGES[activeInfoPackageId]?.versions[selectedVersion]) {
+      console.error(`Unknown version "${selectedVersion}" for package ${activeInfoPackageId}.`);
+      return;
+    }
+    PACKAGES[activeInfoPackageId].selectedVersion = selectedVersion;
+    renderPackageInfo(activeInfoPackageId);
+  });
+
+  packageInfoDownloadZip.addEventListener('click', () => {
+    if (!activeInfoPackageId) return;
+    const selectedVersionInfo = getSelectedVersionInfo(activeInfoPackageId);
+    if (!downloadZipForVersion(selectedVersionInfo)) {
+      console.error(`Did not find a downloadable URL for package ${activeInfoPackageId}.`);
+    }
+  });
+
+  packageInfoDownloadInstaller.addEventListener('click', async () => {
+    if (!activeInfoPackageId) return;
+    if (packageInfoDownloadInstaller.dataset.loading === 'true') return;
+    const selectedVersionInfo = getSelectedVersionInfo(activeInfoPackageId);
+    if (!selectedVersionInfo) {
+      console.error(`Did not find package ${activeInfoPackageId}.`, PACKAGES);
+      return;
+    }
+
+    const initialLabel = packageInfoDownloadInstallerLabel.textContent;
+    packageInfoDownloadInstaller.dataset.loading = 'true';
+    packageInfoDownloadInstallerLabel.textContent = 'Building Installer...';
+    try {
+      await downloadInstallerForVersion(selectedVersionInfo);
+    } catch (error) {
+      console.error(`Failed to build installer for ${selectedVersionInfo.packageId}`, error);
+    } finally {
+      packageInfoDownloadInstaller.dataset.loading = 'false';
+      packageInfoDownloadInstallerLabel.textContent = initialLabel;
+    }
+  });
+
+  packageInfoVccUrlFieldCopy.addEventListener('click', () => {
+    packageInfoVccUrlField.select();
+    navigator.clipboard.writeText(packageInfoVccUrlField.value);
+    packageInfoVccUrlFieldCopy.appearance = 'accent';
+    setTimeout(() => packageInfoVccUrlFieldCopy.appearance = 'neutral', 1000);
+  });
+
   const packageInfoListingHelp = document.getElementById('packageInfoListingHelp');
   packageInfoListingHelp.addEventListener('click', () => addListingToVccHelp.hidden = false);
+
+  const listingIndexUrl = new URL(INDEX_JSON_PATH, window.location.href);
+  fetch(listingIndexUrl.toString())
+    .then(async response => {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch listing index: ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then(listing => {
+      const listingUrl = resolveUrl(listing.url, listingIndexUrl.toString()) ?? listingIndexUrl.toString();
+      updateListingUrlFields(listingUrl);
+      renderListingInfo(listing, listingIndexUrl.toString());
+
+      const packageIndex = buildPackageIndex(listing.packages, semverLibrary, listingIndexUrl.toString());
+      Object.keys(PACKAGES).forEach(key => delete PACKAGES[key]);
+      Object.assign(PACKAGES, packageIndex);
+      renderPackageRows();
+      listingName.textContent = listing.name ?? listingName.textContent;
+    })
+    .catch(error => {
+      listingName.textContent = 'Failed to load package listing';
+      console.error(error);
+    });
 })();

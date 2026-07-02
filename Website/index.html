@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VCC Listing</title>
   <script type="module" src="https://unpkg.com/@fluentui/web-components@2.6.1"></script>
+  <script>
+    window.module = { exports: {} };
+    window.exports = window.module.exports;
+  </script>
+  <script src="https://unpkg.com/semver@5.7.2/semver.js"></script>
+  <script>
+    window.semver = window.module.exports;
+    delete window.module;
+    delete window.exports;
+  </script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,31 +37,21 @@
   </svg>
   <div class="col align-items-center content">
     <div id="listingInfo" class="col mb-4 w-100 align-items-center">
-      {{~ if listingInfo.BannerImage; ~}}
-        <div class="bannerImage" style="background-image: url({{ listingInfo.BannerImageUrl }})"></div>
-      {{~ end; ~}}
-      <h1>
-        {{~ listingInfo.Name ~}}
-      </h1>
-      {{~ if listingInfo.Description; ~}}
-        <div class="caption1 mb-2">{{ listingInfo.Description }}</div>
-      {{~ end; ~}}
+      <div class="bannerImage hidden" id="listingBanner"></div>
+      <h1 id="listingName">Loading listing...</h1>
+      <div class="caption1 mb-2 hidden" id="listingDescription"></div>
       <div class="col align-items-center">
-        {{~ if listingInfo.Author.Email; ~}}
         <fluent-tooltip id="publishedByTooltip" anchor="publishedByText">
-          {{ listingInfo.Author.Email }}
+          <span id="listingAuthorEmail"></span>
         </fluent-tooltip>
-        {{~ end; ~}}
-        <div class="caption1 mb-2" id="publishedByText">Published by <a href="{{listingInfo.Author.Url}}" target="_blank">{{ listingInfo.Author.Name }}</a></div>
-        {{~ if listingInfo.InfoLink.Url ~}}
-          <div class="caption1" id="publishedByText">
-            <a href="{{listingInfo.InfoLink.Url}}" target="_blank">{{ if listingInfo.InfoLink.Text; listingInfo.InfoLink.Text; else; "Lean More"; end; }}</a>
-          </div>
-        {{~ end; ~}}
+        <div class="caption1 mb-2" id="publishedByText">Published by <a href="#" id="listingAuthorLink" target="_blank">Unknown</a></div>
+        <div class="caption1 hidden" id="listingInfoLinkTop">
+          <a href="#" id="listingInfoLinkTopAnchor" target="_blank">Learn More</a>
+        </div>
       </div>
     </div>
     <div class="addToVccBlock mt-4 row align-items-center">
-      <fluent-text-field aria-readonly="true" id="vccUrlField" class="vccUrlField" readonly value="{{ listingInfo.Url }}">
+      <fluent-text-field aria-readonly="true" id="vccUrlField" class="vccUrlField" readonly value="">
       </fluent-text-field>
       <fluent-button appearance="accent" class="ms-2" id="vccAddRepoButton" >Add to VCC</fluent-button>
       <fluent-button class="ms-2" id="vccUrlFieldCopy">
@@ -98,7 +98,7 @@
         </ul>
         <h5 class="m-0 mb-2">Listing URL</h5>
         <div class="row align-items-center">
-          <fluent-text-field aria-readonly="true" id="vccListingInfoUrlField" class="vccUrlField" readonly value="{{ listingInfo.Url }}">
+          <fluent-text-field aria-readonly="true" id="vccListingInfoUrlField" class="vccUrlField" readonly value="">
           </fluent-text-field>
           <fluent-button class="ms-2" id="vccListingInfoUrlFieldCopy">
             <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -119,7 +119,7 @@
           <use href="#downloadicon"></use>
         </svg>
         <div>
-          Download .ZIP
+          Download .ZIP (Latest Stable)
         </div>
       </fluent-menu-item>
       <fluent-menu-item id="rowMoreMenuDownloadInstaller">
@@ -127,7 +127,7 @@
           <use href="#downloadicon"></use>
         </svg>
         <div>
-          Download Installer (.unitypackage)
+          Download Installer (.unitypackage, Latest Stable)
         </div>
       </fluent-menu-item>
     </fluent-menu>
@@ -151,6 +151,22 @@
         <p class="mb-4 mt-1" id="packageInfoDescription">
           Package Description
         </p>
+        <h5 class="m-0 mb-2">Version</h5>
+        <fluent-select id="packageInfoVersionSelect" class="mb-4"></fluent-select>
+        <div class="row mb-4">
+          <fluent-button id="packageInfoDownloadZip" appearance="accent">
+            <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <use href="#downloadicon"></use>
+            </svg>
+            <span id="packageInfoDownloadZipLabel">Download .ZIP</span>
+          </fluent-button>
+          <fluent-button id="packageInfoDownloadInstaller" class="ms-2">
+            <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <use href="#downloadicon"></use>
+            </svg>
+            <span id="packageInfoDownloadInstallerLabel">Download Installer (.unitypackage)</span>
+          </fluent-button>
+        </div>
         <h5 class="m-0">Author</h5>
         <p class="mb-4 mt-1">
           <a href="#" target="_blank" id="packageInfoAuthor">
@@ -173,7 +189,7 @@
         </div>
         <h5 class="m-0 mb-2">Listing URL</h5>
         <div class="row align-items-center">
-          <fluent-text-field aria-readonly="true" id="packageInfoVccUrlField" class="vccUrlField" readonly value="https://xtlcdn.github.io/vpm/index.json">
+          <fluent-text-field aria-readonly="true" id="packageInfoVccUrlField" class="vccUrlField" readonly value="">
           </fluent-text-field>
           <fluent-button class="ms-2" id="packageInfoVccUrlFieldCopy">
             <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -205,39 +221,11 @@
           <fluent-data-grid-cell cell-type="columnheader" grid-column="3">
           </fluent-data-grid-cell>
         </fluent-data-grid-row>
-        {{~ for package in packages ~}}
-          <fluent-data-grid-row data-package-name="{{ package.DisplayName }}" data-package-id="{{ package.Name }}">
-            <fluent-data-grid-cell grid-column="1">
-              <div class="col">
-                <div class="packageName">{{ package.DisplayName }}</div>
-                <div class="caption1">{{ package.Description }}</div>
-                <div class="caption2">{{ package.Name }}</div>
-              </div>
-            </fluent-data-grid-cell>
-            <fluent-data-grid-cell grid-column="2" class="row align-items-center">
-              {{ package.Type }}
-            </fluent-data-grid-cell>
-            <fluent-data-grid-cell grid-column="3" class="row align-items-center justify-content-end">
-              <fluent-button title="Package Info" class="rowPackageInfoButton ms-2" data-package-id="{{ package.Name }}">
-                <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <use href="#copyicon"></use>
-                </svg>
-              </fluent-button>
-              <fluent-button class="rowMenuButton ms-2" appearance="stealth" data-package-id="{{ package.Name }}" data-package-url="{{ package.ZipUrl }}">
-                <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <use href="#downloadicon"></use>
-                </svg>
-              </fluent-button>
-            </fluent-data-grid-cell>
-          </fluent-data-grid-row>
-        {{~ end ~}}
       </fluent-data-grid>
     </fluent-card>
-    {{~ if listingInfo.InfoLink.Url ~}}
-      <div class="caption1" id="publishedByText">
-        <a href="{{listingInfo.InfoLink.Url}}" target="_blank">{{ if listingInfo.InfoLink.Text; listingInfo.InfoLink.Text; else; "Lean More"; end; }}</a>
-      </div>
-    {{~ end; ~}}
+    <div class="caption1 hidden" id="listingInfoLinkBottom">
+      <a href="#" id="listingInfoLinkBottomAnchor" target="_blank">Learn More</a>
+    </div>
   </div>
   <script type="module" src="app.js"></script>
 </body>
