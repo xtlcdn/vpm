@@ -15,6 +15,13 @@ const setTheme = () => {
 };
 
 const asObject = value => (typeof value === 'object' && value !== null ? value : {});
+const getField = (value, ...keys) => {
+  const obj = asObject(value);
+  for (const key of keys) {
+    if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+  }
+  return undefined;
+};
 
 const resolveUrl = (url, baseUrl) => {
   if (!url) return null;
@@ -121,6 +128,7 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
   }
 
   const packageGrid = document.getElementById('packageGrid');
+  const packageRowTemplate = document.getElementById('packageRowTemplate');
   const searchInput = document.getElementById('searchInput');
   const urlBarHelpButton = document.getElementById('urlBarHelp');
   const addListingToVccHelp = document.getElementById('addListingToVccHelp');
@@ -164,6 +172,7 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
   const packageInfoVccUrlFieldCopy = document.getElementById('packageInfoVccUrlFieldCopy');
 
   let activeInfoPackageId = null;
+  const packageTypeCache = {};
 
   const getSelectedVersionInfo = packageId => {
     const packageInfo = PACKAGES[packageId];
@@ -177,6 +186,39 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     if (!packageInfo) return null;
     const latestStableVersion = packageInfo.latestStableVersion;
     return packageInfo.versions[latestStableVersion] ?? null;
+  };
+
+  const getPackageType = (packageId, visited = new Set()) => {
+    if (packageTypeCache[packageId]) return packageTypeCache[packageId];
+    if (visited.has(packageId)) return 'Any';
+    visited.add(packageId);
+
+    const versionInfo = getLatestStableVersionInfo(packageId);
+    if (!versionInfo) return 'Any';
+    const dependencyIds = Object.keys(asObject(versionInfo.dependencies));
+    let hasAvatarDependency = false;
+    if (dependencyIds.includes('com.vrchat.worlds')) {
+      packageTypeCache[packageId] = 'World';
+      return 'World';
+    }
+    if (dependencyIds.includes('com.vrchat.avatars')) {
+      hasAvatarDependency = true;
+    }
+    for (const dependencyId of dependencyIds) {
+      if (!PACKAGES[dependencyId]) continue;
+      const dependencyType = getPackageType(dependencyId, new Set(visited));
+      if (dependencyType === 'World') {
+        packageTypeCache[packageId] = 'World';
+        return 'World';
+      }
+      if (dependencyType === 'Avatar') {
+        hasAvatarDependency = true;
+      }
+    }
+
+    const resolvedType = hasAvatarDependency ? 'Avatar' : 'Any';
+    packageTypeCache[packageId] = resolvedType;
+    return resolvedType;
   };
 
   const downloadZipForVersion = versionInfo => {
@@ -293,63 +335,15 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     const packageVersionInfo = getLatestStableVersionInfo(packageId);
     if (!packageVersionInfo) return null;
 
-    const row = document.createElement('fluent-data-grid-row');
-    row.classList.add('package-row');
+    const row = packageRowTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.packageName = packageVersionInfo.displayName ?? packageId;
     row.dataset.packageId = packageId;
-
-    const nameCell = document.createElement('fluent-data-grid-cell');
-    nameCell.setAttribute('grid-column', '1');
-    const nameCol = document.createElement('div');
-    nameCol.classList.add('col');
-    const name = document.createElement('div');
-    name.classList.add('packageName');
-    name.textContent = packageVersionInfo.displayName ?? packageId;
-    const description = document.createElement('div');
-    description.classList.add('caption1');
-    description.textContent = packageVersionInfo.description ?? '';
-    const id = document.createElement('div');
-    id.classList.add('caption2');
-    id.textContent = packageId;
-    nameCol.appendChild(name);
-    nameCol.appendChild(description);
-    nameCol.appendChild(id);
-    nameCell.appendChild(nameCol);
-
-    const typeCell = document.createElement('fluent-data-grid-cell');
-    typeCell.setAttribute('grid-column', '2');
-    typeCell.classList.add('row', 'align-items-center');
-    typeCell.textContent = packageVersionInfo.type ?? '-';
-
-    const actionsCell = document.createElement('fluent-data-grid-cell');
-    actionsCell.setAttribute('grid-column', '3');
-    actionsCell.classList.add('row', 'align-items-center', 'justify-content-end');
-
-    const infoButton = document.createElement('fluent-button');
-    infoButton.title = 'Package Info';
-    infoButton.classList.add('rowPackageInfoButton', 'ms-2');
-    infoButton.dataset.packageId = packageId;
-    infoButton.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-        <use href="#copyicon"></use>
-      </svg>
-    `;
-
-    const menuButton = document.createElement('fluent-button');
-    menuButton.classList.add('rowMenuButton', 'ms-2');
-    menuButton.appearance = 'stealth';
-    menuButton.dataset.packageId = packageId;
-    menuButton.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-        <use href="#downloadicon"></use>
-      </svg>
-    `;
-
-    actionsCell.appendChild(infoButton);
-    actionsCell.appendChild(menuButton);
-    row.appendChild(nameCell);
-    row.appendChild(typeCell);
-    row.appendChild(actionsCell);
+    row.querySelector('.rowPackageName').textContent = packageVersionInfo.displayName ?? packageId;
+    row.querySelector('.rowPackageDescription').textContent = packageVersionInfo.description ?? '';
+    row.querySelector('.rowPackageId').textContent = packageId;
+    row.querySelector('.rowPackageType').textContent = getPackageType(packageId);
+    row.querySelector('.rowPackageInfoButton').dataset.packageId = packageId;
+    row.querySelector('.rowMenuButton').dataset.packageId = packageId;
 
     return row;
   };
@@ -370,56 +364,6 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     for (const packageId of packageIds) {
       const row = createPackageRow(packageId);
       if (row) packageGrid.appendChild(row);
-    }
-  };
-
-  const renderListingInfo = (listing, listingJsonUrl) => {
-    listingName.textContent = listing.name ?? 'Package Listing';
-
-    if (listing.description) {
-      listingDescription.textContent = listing.description;
-      listingDescription.classList.remove('hidden');
-    } else {
-      listingDescription.classList.add('hidden');
-    }
-
-    const author = getAuthorData(listing.author);
-    listingAuthorLink.textContent = author.name;
-    listingAuthorLink.href = author.url || '#';
-
-    if (author.email) {
-      listingAuthorEmail.textContent = author.email;
-      publishedByTooltip.hidden = false;
-    } else {
-      listingAuthorEmail.textContent = '';
-      publishedByTooltip.hidden = true;
-    }
-
-    const bannerUrl = resolveUrl(listing.bannerUrl ?? listing.bannerImageUrl, listingJsonUrl);
-    if (bannerUrl) {
-      listingBanner.style.backgroundImage = `url(${bannerUrl})`;
-      listingBanner.classList.remove('hidden');
-    } else {
-      listingBanner.classList.add('hidden');
-    }
-
-    const infoLink = normalizeInfoLink(listing.infoLink);
-    if (infoLink.url) {
-      const infoUrl = resolveUrl(infoLink.url, listingJsonUrl);
-      if (infoUrl) {
-        listingInfoLinkTopAnchor.href = infoUrl;
-        listingInfoLinkTopAnchor.textContent = infoLink.text;
-        listingInfoLinkBottomAnchor.href = infoUrl;
-        listingInfoLinkBottomAnchor.textContent = infoLink.text;
-        listingInfoLinkTop.classList.remove('hidden');
-        listingInfoLinkBottom.classList.remove('hidden');
-      } else {
-        listingInfoLinkTop.classList.add('hidden');
-        listingInfoLinkBottom.classList.add('hidden');
-      }
-    } else {
-      listingInfoLinkTop.classList.add('hidden');
-      listingInfoLinkBottom.classList.add('hidden');
     }
   };
 
@@ -609,11 +553,11 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
     .then(listing => {
       const listingUrl = resolveUrl(listing.url, listingIndexUrl.toString()) ?? listingIndexUrl.toString();
       updateListingUrlFields(listingUrl);
-      renderListingInfo(listing, listingIndexUrl.toString());
 
       const packageIndex = buildPackageIndex(listing.packages, semverLibrary, listingIndexUrl.toString());
       Object.keys(PACKAGES).forEach(key => delete PACKAGES[key]);
       Object.assign(PACKAGES, packageIndex);
+      Object.keys(packageTypeCache).forEach(key => delete packageTypeCache[key]);
       renderPackageRows();
       listingName.textContent = listing.name ?? listingName.textContent;
     })
