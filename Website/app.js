@@ -159,10 +159,10 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
   const packageInfoModalClose = document.getElementById('packageInfoModalClose');
   const packageInfoName = document.getElementById('packageInfoName');
   const packageInfoId = document.getElementById('packageInfoId');
-  const packageInfoVersion = document.getElementById('packageInfoVersion');
   const packageInfoVersionSelect = document.getElementById('packageInfoVersionSelect');
   const packageInfoDescription = document.getElementById('packageInfoDescription');
   const packageInfoAuthor = document.getElementById('packageInfoAuthor');
+  const packageInfoAuthorText = document.getElementById('packageInfoAuthorText');
   const packageInfoDependencies = document.getElementById('packageInfoDependencies');
   const packageInfoKeywords = document.getElementById('packageInfoKeywords');
   const packageInfoLicense = document.getElementById('packageInfoLicense');
@@ -268,14 +268,14 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
   };
 
   const renderPackageLicense = (license, licensesUrl) => {
-    if (!license?.length && !licensesUrl?.length) {
+    if (!license && !licensesUrl) {
       packageInfoLicense.parentElement.classList.add('hidden');
       return;
     }
 
     packageInfoLicense.parentElement.classList.remove('hidden');
     const text = license ?? 'See License';
-    if (licensesUrl?.length) {
+    if (licensesUrl) {
       packageInfoLicense.classList.remove('hidden');
       packageInfoLicenseText.classList.add('hidden');
       packageInfoLicense.textContent = text;
@@ -296,7 +296,7 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
       const isInternalPackage = Boolean(PACKAGES[name]);
       dependencyLink.textContent = name;
       if (isInternalPackage) {
-        dependencyLink.href = '#';
+        dependencyLink.href = '###';
         dependencyLink.addEventListener('click', event => {
           event.preventDefault();
           openPackageInfo(name);
@@ -347,10 +347,26 @@ const buildPackageIndex = (packages, semverLibrary, listingJsonUrl) => {
 
     packageInfoName.textContent = selectedVersionInfo.displayName ?? packageId;
     packageInfoId.textContent = packageId;
-    packageInfoVersion.textContent = `v${selectedVersionInfo.version}`;
     packageInfoDescription.textContent = selectedVersionInfo.description ?? '';
-    packageInfoAuthor.textContent = selectedVersionInfo.author.name ?? 'Unknown';
-    packageInfoAuthor.href = selectedVersionInfo.author.url || '#';
+    if (selectedVersionInfo.author.url) {
+      packageInfoAuthorText.textContent = '';
+      packageInfoAuthorText.classList.add('hidden');
+      packageInfoAuthor.textContent = selectedVersionInfo.author.name ?? 'Unknown';
+      packageInfoAuthor.href = selectedVersionInfo.author.url;
+      packageInfoAuthor.classList.remove('hidden');
+    } else if (selectedVersionInfo.author.email) {
+      packageInfoAuthorText.textContent = '';
+      packageInfoAuthorText.classList.add('hidden');
+      packageInfoAuthor.textContent = selectedVersionInfo.author.name ?? 'Unknown';
+      packageInfoAuthor.href = `mailto:${selectedVersionInfo.author.email}`;
+      packageInfoAuthor.classList.remove('hidden');
+    } else {
+      packageInfoAuthorText.textContent = selectedVersionInfo.author.name ?? 'Unknown';
+      packageInfoAuthorText.classList.remove('hidden');
+      packageInfoAuthor.textContent = '';
+      packageInfoAuthor.href = '###';
+      packageInfoAuthor.classList.add('hidden');
+    }
 
     packageInfoVersionSelect.innerHTML = '';
     for (const version of packageData.sortedVersions) {

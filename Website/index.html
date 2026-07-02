@@ -148,7 +148,7 @@
             <h3 class="m-0 mb-1" id="packageInfoName">Package Name</h3>
             <div class="row">
               <div class="caption1" id="packageInfoId">com.package.id</div>
-              <div class="caption1 ms-2" id="packageInfoVersion">v1.0.1</div>
+              <fluent-select id="packageInfoVersionSelect" class="ms-2 packageInfoVersionSelectTop"></fluent-select>
             </div>
           </div>
           <fluent-button appearance="stealth" id="packageInfoModalClose">
@@ -161,8 +161,6 @@
         <p class="mb-4 mt-1" id="packageInfoDescription">
           Package Description
         </p>
-        <h5 class="m-0 mb-2">Version</h5>
-        <fluent-select id="packageInfoVersionSelect" class="mb-4"></fluent-select>
         <div class="row mb-4">
           <fluent-button id="packageInfoDownloadZip" appearance="accent">
             <svg slot="start" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -179,9 +177,8 @@
         </div>
         <h5 class="m-0">Author</h5>
         <p class="mb-4 mt-1">
-          <a href="#" target="_blank" id="packageInfoAuthor">
-            Author Name
-          </a>
+          <a href="#" target="_blank" id="packageInfoAuthor">Author Name</a>
+          <span class="hidden" id="packageInfoAuthorText"></span>
         </p>
         <h5 class="m-0 mb-2">Dependencies</h5>
         <ul class="mt-1 ps-5" id="packageInfoDependencies">
@@ -193,9 +190,7 @@
         </div>
         <div class="col">
           <h5 class="m-0">License</h5>
-          <a href="#" class="mb-4 mt-1" id="packageInfoLicense">
-            License
-          </a>
+          <a href="#" class="mb-4 mt-1" id="packageInfoLicense">License</a>
           <span class="mb-4 mt-1 hidden" id="packageInfoLicenseText"></span>
         </div>
         <h5 class="m-0 mb-2">Listing URL</h5>
